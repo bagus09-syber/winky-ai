@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="id">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="theme-color"
+        content="#101827"
+    >
+
+    <title>Winky AI</title>
+
+</head>
+
+
+<body>
+
+
+<!-- =====================================================
+     AUTH SCREEN
+     ===================================================== -->
+
+<div id="authScreen">
+
+    <div class="auth-card">
+
+        <div class="auth-logo">
+            W
+        </div>
+
+        <h1>
+            Winky AI
+        </h1>
+
+        <p>
+            Masuk atau buat akun
+        </p>
+
+        <div id="authError"></div>
+
+        <input
+            id="authUsername"
+            type="text"
+            autocomplete="username"
+            placeholder="Username"
+        >
+
+        <input
+            id="authPassword"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Password"
+        >
+
+        <button id="loginButton">
+            Masuk
+        </button>
+
+        <button
+            id="registerButton"
+            class="secondary"
+        >
+            Daftar
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- =====================================================
+     MAIN APP
+     ===================================================== -->
+
+<div id="app">
+
+
+    <!-- =================================================
+         WINKY ROBOT
+         ================================================= -->
+
+    <div
+        id="winkyRobot"
+        class="winky-robot hidden"
+        aria-live="polite"
+    >
+
+        <div class="robot-stage">
+
+            <div class="robot-glow"></div>
+
+
+            <div class="robot">
+
+
+                <!-- ANTENNA -->
+
+                <div class="robot-antenna">
+
+                    <span></span>
+
+                </div>
+
+
+                <!-- HEAD -->
+
+                <div class="robot-head">
+
+
+                    <div class="robot-ear left"></div>
+
+                    <div class="robot-ear right"></div>
+
+
+                    <div class="robot-face">
+
+
+                        <!-- EYES -->
+
+                        <div class="robot-eyes">
+
+                            <span
+                                class="robot-eye left-eye"
+                            ></span>
+
+                            <span
+                                class="robot-eye right-eye"
+                            ></span>
+
+                        </div>
+
+
+                        <!-- MOUTH -->
+
+                        <div class="robot-mouth">
+
+                            <span></span>
+
+                        </div>
+
+
+                    </div>
+
+                </div>
+
+
+                <!-- BODY -->
+
+                <div class="robot-body">
+
+                    <div class="robot-badge">
+                        W
+                    </div>
+
+                </div>
+
+
+            </div>
+
+
+            <!-- ROBOT STATUS -->
+
+            <div
+                id="robotStatus"
+                class="robot-status"
+            >
+                Halo, saya Winky AI
+            </div>
+
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =================================================
+         SIDEBAR
+         ================================================= -->
+
+    <aside class="sidebar">
+
+
+        <!-- BRAND -->
+
+        <div class="brand">
+
+            <span class="brand-icon">
+                ✨
+            </span>
+
+            <span>
+                Winky AI
+            </span>
+
+        </div>
+
+
+        <!-- USER -->
+
+        <div class="user-box">
+
+            <div class="user-info">
+
+                <div class="user-avatar">
+                    W
+                </div>
+
+                <span id="usernameDisplay">
+                    User
+                </span>
+
+            </div>
+
+            <button
+                id="logoutButton"
+                title="Keluar"
+            >
+                Keluar
+            </button>
+
+        </div>
+
+
+        <!-- MAIN ACTIONS -->
+
+        <button
+            id="newChat"
+            class="sidebar-action"
+        >
+            ＋ Chat Baru
+        </button>
+
+
+        <button
+            id="memoryButton"
+            class="sidebar-action"
+        >
+            🧠 Memory
+        </button>
+
+
+        <button
+            id="filesButton"
+            class="sidebar-action"
+        >
+            📁 File
+        </button>
+
+
+        <button
+            id="exportButton"
+            class="sidebar-action"
+        >
+            💾 Export Chat
+        </button>
+
+
+        <button
+            id="settingsButton"
+            class="sidebar-action"
+        >
+            ⚙️ Pengaturan
+        </button>
+
+
+        <!-- PLAN -->
+
+        <div class="plan-box">
+
+            <div class="plan-icon">
+                ✦
+            </div>
+
+            <div>
+
+                <strong>
+                    Winky Free
+                </strong>
+
+                <span>
+                    Versi prototype
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <!-- HISTORY -->
+
+        <div class="history-title">
+            RIWAYAT CHAT
+        </div>
+
+
+        <div
+            id="historyList"
+            class="history-list"
+        ></div>
+
+
+    </aside>
+
+
+
+    <!-- =================================================
+         MAIN CONTENT
+         ================================================= -->
+
+    <main class="main">
+
+
+        <!-- TOPBAR -->
+
+        <header class="topbar">
+
+
+            <div class="topbar-left">
+
+                <div class="topbar-logo">
+                    W
+                </div>
+
+                <div>
+
+                    <strong>
+                        Winky AI
+                    </strong>
+
+                    <small>
+                        AI Assistant
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="topbar-right">
+
+                <span
+                    id="connectionStatus"
+                    class="connection-status"
+                >
+                    ● Online
+                </span>
+
+            </div>
+
+
+        </header>
+
+
+
+        <!-- =================================================
+             MESSAGES
+             ================================================= -->
+
+        <section
+            id="messages"
+            class="messages"
+        >
+
+
+            <!-- WELCOME -->
+
+            <div class="welcome">
+
+                <div class="welcome-orb">
+
+                    <div class="welcome-logo">
+                        W
+                    </div>
+
+                </div>
+
+
+                <h1>
+                    Halo, saya Winky AI
+                </h1>
+
+
+                <p>
+                    Apa yang ingin kamu kerjakan hari ini?
+                </p>
+
+
+                <div class="welcome-features">
+
+                    <div class="welcome-feature">
+                        🧠
+                        <span>
+                            Memory
+                        </span>
+                    </div>
+
+                    <div class="welcome-feature">
+                        📁
+                        <span>
+                            File
+                        </span>
+                    </div>
+
+                    <div class="welcome-feature">
+                        🌐
+                        <span>
+                            Web
+                        </span>
+                    </div>
+
+                    <div class="welcome-feature">
+                        🎤
+                        <span>
+                            Voice
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =================================================
+             INPUT AREA
+             ================================================= -->
+
+        <div class="input-area">
+
+
+            <div class="input-box">
+
+
+                <!-- TOOLBAR -->
+
+                <div class="toolbar">
+
+
+                    <!-- FILE -->
+
+                    <label
+                        for="fileInput"
+                        class="tool-button"
+                        title="Upload file"
+                    >
+                        📎
+                    </label>
+
+
+                    <input
+                        id="fileInput"
+                        type="file"
+                        hidden
+                        accept=".txt,.md,.json,.csv,.html,.css,.js,.py,.php,.sql"
+                    >
+
+
+                    <!-- WEB -->
+
+                    <button
+                        id="webButton"
+                        class="tool-button"
+                        title="Web Search"
+                    >
+                        🌐
+                    </button>
+
+
+                    <!-- VOICE -->
+
+                    <button
+                        id="voiceButton"
+                        class="tool-button"
+                        title="Voice"
+                    >
+                        🎤
+                    </button>
+
+
+                </div>
+
+
+                <!-- TEXT -->
+
+                <textarea
+                    id="input"
+                    placeholder="Tanya Winky AI..."
+                    rows="1"
+                    autocomplete="off"
+                ></textarea>
+
+
+                <!-- STOP -->
+
+                <button
+                    id="stopButton"
+                    title="Hentikan"
+                >
+                    ■
+                </button>
+
+
+                <!-- SEND -->
+
+                <button
+                    id="sendButton"
+                    title="Kirim"
+                >
+                    ↑
+                </button>
+
+
+            </div>
+
+
+            <!-- FILE STATUS -->
+
+            <div
+                id="fileStatus"
+                class="file-status"
+            ></div>
+
+
+            <small>
+                Enter kirim · Shift + Enter baris baru
+            </small>
+
+
+        </div>
+
+
+    </main>
+
+
+
+    <!-- =================================================
+         MEMORY PANEL
+         ================================================= -->
+
+    <div
+        id="memoryPanel"
+        class="panel hidden"
+    >
+
+
+        <div class="panel-header">
+
+            <strong>
+                🧠 Memory Winky
+            </strong>
+
+            <button
+                id="closeMemory"
+                title="Tutup"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <div
+            id="memoryList"
+            class="panel-content"
+        ></div>
+
+
+        <div class="panel-form">
+
+
+            <input
+                id="memoryKey"
+                type="text"
+                placeholder="Nama memory"
+            >
+
+
+            <input
+                id="memoryValue"
+                type="text"
+                placeholder="Nilai"
+            >
+
+
+            <button id="saveMemory">
+                ＋ Tambah Memory
+            </button>
+
+
+        </div>
+
+
+    </div>
+
+
+
+    <!-- =================================================
+         FILE PANEL
+         ================================================= -->
+
+    <div
+        id="filesPanel"
+        class="panel hidden"
+    >
+
+
+        <div class="panel-header">
+
+            <strong>
+                📁 File Winky
+            </strong>
+
+            <button
+                id="closeFiles"
+                title="Tutup"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <div
+            id="fileList"
+            class="panel-content"
+        ></div>
+
+
+    </div>
+
+
+
+    <!-- =================================================
+         SETTINGS PANEL
+         ================================================= -->
+
+    <div
+        id="settingsPanel"
+        class="panel settings-panel hidden"
+    >
+
+
+        <div class="panel-header">
+
+            <strong>
+                ⚙️ Pengaturan
+            </strong>
+
+            <button
+                id="closeSettings"
+                title="Tutup"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <div class="panel-content">
+
+
+            <label
+                for="modelSelect"
+            >
+                Model AI
+            </label>
+
+
+            <select
+                id="modelSelect"
+            ></select>
+
+
+            <!-- SERVER STATUS -->
+
+            <div class="server-box">
+
+
+                <div>
+
+                    <span>
+                        Backend
+                    </span>
+
+                    <span
+                        id="backendStatus"
+                    >
+                        ...
+                    </span>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Ollama
+                    </span>
+
+                    <span
+                        id="ollamaStatus"
+                    >
+                        ...
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+            <!-- CURRENT MODE -->
+
+            <div class="ai-mode-box">
+
+                <div class="ai-mode-icon">
+                    ⚡
+                </div>
+
+                <div>
+
+                    <strong>
+                        Winky Fast Mode
+                    </strong>
+
+                    <span>
+                        Respons cepat untuk prototype
+                    </span>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+
+</div>
+
+
+
+<!-- =====================================================
+     JAVASCRIPT
+     ===================================================== -->
+
+<script
+    type="module"
+    src="/src/main.js"
+></script>
+
+
+</body>
+
+</html>
