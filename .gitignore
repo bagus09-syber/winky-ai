@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Local database
+# Database lokal
 backend/winky.db
 
 # Environment
