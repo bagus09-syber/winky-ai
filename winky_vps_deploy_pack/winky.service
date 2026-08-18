@@ -1,0 +1,16 @@
+[Unit]
+Description=Winky AI FastAPI backend
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/winky/backend
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/opt/winky/backend/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
