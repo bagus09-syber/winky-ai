@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, HTTPException, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -13,6 +13,10 @@ import hashlib
 import ast
 import operator as op
 from datetime import datetime
+from pathlib import Path
+from collections import defaultdict, deque
+from urllib.parse import quote
+import os
 
 
 try:
@@ -29,16 +33,52 @@ app = FastAPI(title="Winky AI")
 
 
 # =========================================================
-# CORS
+# SECURITY / CORS
 # =========================================================
+
+DEFAULT_ORIGINS = [
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+]
+
+_extra_origins = [
+    item.strip()
+    for item in os.getenv("WINKY_ALLOWED_ORIGINS", "").split(",")
+    if item.strip()
+]
+
+FRONTEND_ORIGINS = list(dict.fromkeys(
+    DEFAULT_ORIGINS + _extra_origins
+))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+    ],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+    ],
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "microphone=(self)"
+
+    return response
 
 
 # =========================================================
@@ -60,6 +100,40 @@ ALLOWED_MODELS = {
 DB_FILE = "winky.db"
 
 MAX_FILE_SIZE = 2 * 1024 * 1024
+
+MAX_MESSAGE_LENGTH = 12000
+MAX_USERNAME_LENGTH = 50
+MAX_MEMORY_KEY_LENGTH = 80
+MAX_MEMORY_VALUE_LENGTH = 1000
+
+RATE_LIMITS = {
+    "login": (5, 60),
+    "register": (5, 600),
+    "chat": (30, 60),
+    "upload": (10, 60),
+    "search": (20, 60),
+}
+
+_rate_buckets = defaultdict(deque)
+
+
+def client_ip(request):
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
+def check_rate_limit(key, subject):
+    limit, window = RATE_LIMITS[key]
+    now = datetime.now().timestamp()
+    bucket = _rate_buckets[(key, subject)]
+
+    while bucket and now - bucket[0] > window:
+        bucket.popleft()
+
+    if len(bucket) >= limit:
+        raise HTTPException(429, "Terlalu banyak permintaan. Coba lagi sebentar.")
+
+    bucket.append(now)
 
 ALLOWED_EXTENSIONS = {
     ".txt",
@@ -261,10 +335,55 @@ class MemoryRequest(BaseModel):
 # AUTH
 # =========================================================
 
+PASSWORD_ITERATIONS = 310_000
+
+
 def hash_password(password):
-    return hashlib.sha256(
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_ITERATIONS,
+    )
+
+    return (
+        f"pbkdf2_sha256${PASSWORD_ITERATIONS}$"
+        f"{salt.hex()}${digest.hex()}"
+    )
+
+
+def verify_password(password, stored_hash):
+    if stored_hash.startswith("pbkdf2_sha256$"):
+        try:
+            algorithm, iterations, salt_hex, digest_hex = stored_hash.split("$", 3)
+
+            if algorithm != "pbkdf2_sha256":
+                return False
+
+            actual = hashlib.pbkdf2_hmac(
+                "sha256",
+                password.encode("utf-8"),
+                bytes.fromhex(salt_hex),
+                int(iterations),
+            )
+
+            return secrets.compare_digest(
+                actual,
+                bytes.fromhex(digest_hex),
+            )
+
+        except Exception:
+            return False
+
+    legacy = hashlib.sha256(
         password.encode("utf-8")
     ).hexdigest()
+
+    return secrets.compare_digest(
+        legacy,
+        stored_hash,
+    )
 
 
 def create_session(conn, user_id):
@@ -441,7 +560,8 @@ def require_feature(user, feature):
 
 
 @app.post("/api/auth/register")
-def register(data: RegisterRequest):
+def register(data: RegisterRequest, request: Request):
+    check_rate_limit("register", client_ip(request))
     username = data.username.strip()
     password = data.password
 
@@ -450,6 +570,9 @@ def register(data: RegisterRequest):
             status_code=400,
             detail="Username minimal 3 karakter."
         )
+
+    if len(username) > MAX_USERNAME_LENGTH:
+        raise HTTPException(400, "Username terlalu panjang.")
 
     if len(password) < 6:
         raise HTTPException(
@@ -501,7 +624,8 @@ def register(data: RegisterRequest):
 
 
 @app.post("/api/auth/login")
-def login(data: LoginRequest):
+def login(data: LoginRequest, request: Request):
+    check_rate_limit("login", client_ip(request))
     conn = get_db()
 
     user = conn.execute(
@@ -516,8 +640,9 @@ def login(data: LoginRequest):
 
     if (
         not user
-        or user["password_hash"] != hash_password(
-            data.password
+        or not verify_password(
+            data.password,
+            user["password_hash"],
         )
     ):
         conn.close()
@@ -525,6 +650,12 @@ def login(data: LoginRequest):
         raise HTTPException(
             status_code=401,
             detail="Username atau password salah."
+        )
+
+    if not user["password_hash"].startswith("pbkdf2_sha256$"):
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(data.password), user["id"]),
         )
 
     token = create_session(
@@ -881,6 +1012,12 @@ def save_memory(
 ):
     key = key.strip().lower()
     value = value.strip()
+
+    if len(key) > MAX_MEMORY_KEY_LENGTH:
+        key = key[:MAX_MEMORY_KEY_LENGTH]
+
+    if len(value) > MAX_MEMORY_VALUE_LENGTH:
+        value = value[:MAX_MEMORY_VALUE_LENGTH]
 
     if not key or not value:
         return
@@ -1292,15 +1429,18 @@ def file_context(conn, uid, fid):
 @app.post("/api/files/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    authorization: str | None = Header(default=None)
+    authorization: str | None = Header(default=None),
+    request: Request = None,
 ):
+    rate_subject = extract_token(authorization) or (client_ip(request) if request else "unknown")
+    check_rate_limit("upload", rate_subject)
     conn = get_db()
     user = require_user(
         conn,
         authorization
     )
 
-    filename = file.filename or "file"
+    filename = Path(file.filename or "file").name
 
     ext = (
         "."
@@ -1426,120 +1566,6 @@ def delete_file(
     return {
         "success": True
     }
-
-
-# =========================================================
-# KNOWLEDGE SEARCH
-# =========================================================
-
-def knowledge_context(
-    conn,
-    uid,
-    query
-):
-    words = {
-        word.lower()
-        for word in re.findall(
-            r"[A-Za-z0-9_]+",
-            query
-        )
-        if len(word) >= 3
-    }
-
-    if not words:
-        return None
-
-    rows = conn.execute(
-        """
-        SELECT filename, content
-        FROM files
-        WHERE user_id = ?
-        ORDER BY id DESC
-        LIMIT 50
-        """,
-        (uid,)
-    ).fetchall()
-
-    ranked = []
-
-    for row in rows:
-        text = row["content"].lower()
-        filename = row["filename"].lower()
-
-        score = (
-            sum(1 for word in words if word in text)
-            + 2 * sum(
-                1
-                for word in words
-                if word in filename
-            )
-        )
-
-        if score:
-            ranked.append(
-                (
-                    score,
-                    row["filename"],
-                    row["content"]
-                )
-            )
-
-    ranked.sort(
-        reverse=True
-    )
-
-    parts = []
-
-    for score, name, content in ranked[:3]:
-        lines = content.splitlines()
-        hits = []
-
-        for index, line in enumerate(lines):
-            line_score = sum(
-                1
-                for word in words
-                if word in line.lower()
-            )
-
-            if line_score:
-                excerpt = "\n".join(
-                    lines[
-                        max(0, index - 2):
-                        min(len(lines), index + 3)
-                    ]
-                )
-
-                hits.append(
-                    (
-                        line_score,
-                        index,
-                        excerpt
-                    )
-                )
-
-        hits.sort(reverse=True)
-
-        excerpt = (
-            "\n\n".join(
-                item[2]
-                for item in hits[:8]
-            )[:12000]
-            if hits
-            else content[:12000]
-        )
-
-        parts.append(
-            f"FILE: {name}\n"
-            f"RELEVANCE: {score}\n\n"
-            f"{excerpt}"
-        )
-
-    if not parts:
-        return None
-
-    return "\n\n====================\n\n".join(
-        parts
-    )
 
 
 # =========================================================
@@ -1731,7 +1757,8 @@ def perform_web_search(query):
 
 
 @app.get("/api/search")
-def search(q: str):
+def search(q: str, request: Request):
+    check_rate_limit("search", client_ip(request))
     q = q.strip()
 
     if not q:
@@ -2144,8 +2171,11 @@ def deep_research(query, max_queries=3, max_results_per_query=4):
 @app.post("/api/chat/stream")
 def chat_stream(
     data: ChatRequest,
-    authorization: str | None = Header(default=None)
+    authorization: str | None = Header(default=None),
+    request: Request = None,
 ):
+    conn_for_rate = extract_token(authorization) or (client_ip(request) if request else "unknown")
+    check_rate_limit("chat", conn_for_rate)
     message = data.message.strip()
 
     if not message:
@@ -2153,6 +2183,9 @@ def chat_stream(
             status_code=400,
             detail="Pesan kosong."
         )
+
+    if len(message) > MAX_MESSAGE_LENGTH:
+        raise HTTPException(400, "Pesan terlalu panjang.")
 
     conn = get_db()
 
