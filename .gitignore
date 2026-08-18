@@ -14,3 +14,5 @@ venv/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+*_backup.py
+*_backup_*.py
