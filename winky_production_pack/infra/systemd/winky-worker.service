@@ -1,0 +1,13 @@
+[Unit]
+Description=Winky background worker placeholder
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/winky
+ExecStart=/bin/sh -c 'echo "Queue worker placeholder - connect Celery/RQ/ARQ here"; sleep infinity'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
